@@ -129,11 +129,40 @@ func buildErrorRTF(sourceFile string, parseErr error) []byte {
 // Low-level RTF helpers
 // ---------------------------------------------------------------------------
 
-// writeRTFHeader writes the RTF document preamble with font and colour tables.
+// Page layout constants for A4 landscape.
+const (
+	paperWidth  = 16838 // A4 landscape width
+	paperHeight = 11906 // A4 landscape height
+	marginLeft  = 1000
+	marginRight = 1000
+	usableWidth = paperWidth - marginLeft - marginRight // 14838 twips
+)
+
+var columnWidths = []int{
+	500,  // n
+	800,  // MQTT
+	800,  // InvID
+	1400, // Unit GUID
+	1000, // Message ID
+	2500, // Message Text
+	800,  // Context
+	800,  // Class
+	700,  // Level
+	900,  // Variable Zone
+	1100, // Variable Address
+	650,  // Block Start
+	650,  // Type
+	550,  // Bit n
+	650,  // Invert Bit
+}
+
+// writeRTFHeader writes the RTF document preamble with font.
 func writeRTFHeader(b *bytes.Buffer) {
 	b.WriteString(`{\rtf1\ansi\deff0`)
 	b.WriteString(`{\fonttbl{\f0\froman\fcharset204 Times New Roman;}{\f1\fswiss\fcharset204 Arial;}}`)
 	b.WriteString(`{\colortbl;\red0\green0\blue0;\red0\green0\blue128;\red200\green200\blue200;}`)
+	b.WriteString(fmt.Sprintf(`\paperw%d\paperh%d\lndscpsxn`, paperWidth, paperHeight))
+	b.WriteString(fmt.Sprintf(`\margl%d\margr%d\margt800\margb800`, marginLeft, marginRight))
 	b.WriteString(`\widowctrl\hyphauto`)
 	b.WriteString("\n")
 }
@@ -165,27 +194,28 @@ func writeRTFNewLine(b *bytes.Buffer) {
 	b.WriteString("\n")
 }
 
-// writeRTFTableRow writes a single row of a simulated RTF table.
-// RTF tables use \trowd/\row markup; each cell is separated by \cell.
+// writeRTFTableRow writes a single row using proportional per-column widths.
 func writeRTFTableRow(b *bytes.Buffer, cells []string, isHeader bool) {
-	const cellWidth = 1200 // twips (~2.1 cm per cell)
+	b.WriteString(`\trowd\trgaph60\trleft0`)
 
-	b.WriteString(`\trowd\trgaph108\trleft-108`)
-
-	// Define cell boundaries.
-	for i := range cells {
-		pos := cellWidth * (i + 1)
-		b.WriteString(fmt.Sprintf(`\cellx%d`, pos))
+	// Define cell boundaries using cumulative widths.
+	pos := 0
+	for _, w := range columnWidths {
+		pos += w
+		if isHeader {
+			b.WriteString(fmt.Sprintf(`\clcbpat3\cellx%d`, pos))
+		} else {
+			b.WriteString(fmt.Sprintf(`\cellx%d`, pos))
+		}
 	}
-
 	b.WriteString("\n")
 
 	// Write cell contents.
 	for _, cell := range cells {
 		if isHeader {
-			b.WriteString(`\pard\intbl\b\f1\fs18 `)
+			b.WriteString(`\pard\intbl\b\f1\fs16 `)
 		} else {
-			b.WriteString(`\pard\intbl\b0\f0\fs18 `)
+			b.WriteString(`\pard\intbl\b0\f0\fs16 `)
 		}
 		b.WriteString(escapeRTF(cell))
 		b.WriteString(`\cell`)
