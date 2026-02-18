@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/spf13/viper"
@@ -42,8 +43,8 @@ type DatabaseConfig struct {
 // DSN builds a PostgreSQL connection string.
 func (d DatabaseConfig) DSN() string {
 	return fmt.Sprintf(
-		"host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
-		d.Host, d.Port, d.User, d.Password, d.DBName, d.SSLMode,
+		"postgres://%s:%s@%s:%d/%s?sslmode=%s",
+		d.User, d.Password, d.Host, d.Port, d.DBName, d.SSLMode,
 	)
 }
 
@@ -62,6 +63,9 @@ type FilesConfig struct {
 func Load(path string) (*Config, error) {
 	viper.SetConfigFile(path)
 	viper.SetConfigType("yaml")
+
+	viper.AutomaticEnv()
+	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 
 	if err := viper.ReadInConfig(); err != nil {
 		return nil, fmt.Errorf("reading config file: %w", err)
