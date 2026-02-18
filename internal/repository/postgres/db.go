@@ -6,7 +6,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/Deymos01/tsv-processor/internal/config"
+	"github.com/Deymos01/tsv-processing/internal/config"
 )
 
 // NewPool creates and validates a pgx connection pool.

@@ -3,7 +3,7 @@ package repository
 import (
 	"context"
 
-	"github.com/Deymos01/tsv-processor/internal/domain"
+	"github.com/Deymos01/tsv-processing/internal/domain"
 )
 
 // MessageRepository defines persistence operations for messages.
