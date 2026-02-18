@@ -70,7 +70,7 @@ func buildReportRTF(unitGUID string, messages []domain.Message) []byte {
 
 	writeRTFHeader(&b)
 	writeRTFTitle(&b, fmt.Sprintf("Report for Unit GUID: %s", unitGUID))
-	writeRTFParagraph(&b, fmt.Sprintf("Generated: %s", time.Now().Format("2006-01-02 15:04:05")))
+	writeRTFParagraph(&b, fmt.Sprintf("Generated: %s", time.Now().UTC().Add(3*time.Hour).Format("2006-01-02 15:04:05")))
 	writeRTFParagraph(&b, fmt.Sprintf("Total messages: %d", len(messages)))
 	writeRTFNewLine(&b)
 
@@ -116,7 +116,7 @@ func buildErrorRTF(sourceFile string, parseErr error) []byte {
 	writeRTFHeader(&b)
 	writeRTFTitle(&b, "File Processing Error Report")
 	writeRTFParagraph(&b, fmt.Sprintf("Source file: %s", sourceFile))
-	writeRTFParagraph(&b, fmt.Sprintf("Generated: %s", time.Now().Format("2006-01-02 15:04:05")))
+	writeRTFParagraph(&b, fmt.Sprintf("Generated: %s", time.Now().UTC().Add(3*time.Hour).Format("2006-01-02 15:04:05")))
 	writeRTFNewLine(&b)
 	writeRTFTitle(&b, "Error Details")
 	writeRTFParagraph(&b, escapeRTF(parseErr.Error()))

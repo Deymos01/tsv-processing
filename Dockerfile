@@ -20,8 +20,6 @@ COPY --from=builder /app/bin/server .
 COPY --from=builder /app/migrations ./migrations
 COPY --from=builder /app/config.yaml ./config.yaml
 
-RUN mkdir -p ./data/input ./data/output
-
 EXPOSE 8080
 
 ENTRYPOINT ["./server"]

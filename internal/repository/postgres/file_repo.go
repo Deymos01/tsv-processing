@@ -99,7 +99,7 @@ func (r *FileRepo) UpdateStatus(
 ) error {
 	var processedAt *time.Time
 	if status == domain.FileStatusDone || status == domain.FileStatusError {
-		t := time.Now()
+		t := time.Now().UTC().Add(3 * time.Hour)
 		processedAt = &t
 	}
 
