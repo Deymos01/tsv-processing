@@ -1,7 +1,7 @@
 package parser
 
 import (
-	"encoding/csv"
+	"bufio"
 	"fmt"
 	"io"
 	"os"
@@ -41,41 +41,52 @@ func ParseTSV(filePath, fileName string) ([]domain.Message, error) {
 	}
 	defer f.Close()
 
-	r := csv.NewReader(f)
-	r.Comma = '\t'
-	r.LazyQuotes = true // TSV files may contain unescaped quotes
-	r.TrimLeadingSpace = true
+	return parseTSVReader(f, fileName)
+}
 
-	// Skip header row.
-	if _, err = r.Read(); err != nil {
-		return nil, fmt.Errorf("read tsv header: %w", err)
+func parseTSVReader(r io.Reader, fileName string) ([]domain.Message, error) {
+	scanner := bufio.NewScanner(r)
+
+	// Skip the first two lines: comment line and header row.
+	for i, label := range []string{"comment", "header"} {
+		if !scanner.Scan() {
+			if err := scanner.Err(); err != nil {
+				return nil, fmt.Errorf("read tsv %s (line %d): %w", label, i+1, err)
+			}
+			return nil, fmt.Errorf("read tsv %s (line %d): unexpected end of file", label, i+1)
+		}
 	}
 
 	var (
 		messages []domain.Message
 		firstErr *domain.ParseError
-		line     = 1 // header was line 1; data starts at line 2
+		line     = 2 // data starts at line 3
 	)
 
-	for {
+	for scanner.Scan() {
 		line++
-		record, err := r.Read()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			if firstErr == nil {
-				firstErr = &domain.ParseError{
-					File:    fileName,
-					Line:    line,
-					Column:  "—",
-					Message: fmt.Sprintf("csv read error: %s", err.Error()),
-				}
-			}
+
+		raw := scanner.Text()
+
+		// Skip completely blank lines.
+		if strings.TrimSpace(raw) == "" {
 			continue
 		}
 
-		msg, parseErr := recordToMessage(record, fileName, line)
+		// Split by tab without any trimming — preserves empty fields.
+		// A row "a\t\tb" correctly produces ["a", "", "b"].
+		fields := strings.Split(raw, "\t")
+		for i, v := range fields {
+			fields[i] = strings.TrimSpace(v)
+		}
+
+		// Pad with empty strings if the row is shorter than expected.
+		// This tolerates trailing empty columns that some editors omit.
+		for len(fields) < totalColumns {
+			fields = append(fields, "")
+		}
+
+		msg, parseErr := recordToMessage(fields, fileName, line)
 		if parseErr != nil {
 			if firstErr == nil {
 				firstErr = parseErr
@@ -84,6 +95,10 @@ func ParseTSV(filePath, fileName string) ([]domain.Message, error) {
 		}
 
 		messages = append(messages, *msg)
+	}
+
+	if err := scanner.Err(); err != nil {
+		return messages, fmt.Errorf("scanning tsv file: %w", err)
 	}
 
 	if firstErr != nil {
@@ -95,15 +110,6 @@ func ParseTSV(filePath, fileName string) ([]domain.Message, error) {
 
 // recordToMessage maps a single TSV record to a domain.Message.
 func recordToMessage(record []string, fileName string, line int) (*domain.Message, *domain.ParseError) {
-	if len(record) < totalColumns {
-		return nil, &domain.ParseError{
-			File:    fileName,
-			Line:    line,
-			Column:  "—",
-			Message: fmt.Sprintf("expected %d columns, got %d", totalColumns, len(record)),
-		}
-	}
-
 	number, err := strconv.Atoi(strings.TrimSpace(record[colNumber]))
 	if err != nil {
 		return nil, &domain.ParseError{
@@ -116,16 +122,18 @@ func recordToMessage(record []string, fileName string, line int) (*domain.Messag
 
 	bitNumber, err := strconv.Atoi(strings.TrimSpace(record[colBitNumberInRegister]))
 	if err != nil {
-		return nil, &domain.ParseError{
-			File:    fileName,
-			Line:    line,
-			Column:  "bit_number_in_register",
-			Message: fmt.Sprintf("invalid integer: %q", record[colBitNumberInRegister]),
+		// Empty bit number is allowed — treat as 0.
+		if strings.TrimSpace(record[colBitNumberInRegister]) == "" {
+			bitNumber = 0
+		} else {
+			return nil, &domain.ParseError{
+				File:    fileName,
+				Line:    line,
+				Column:  "bit_number_in_register",
+				Message: fmt.Sprintf("invalid integer: %q", record[colBitNumberInRegister]),
+			}
 		}
 	}
-
-	useAsBlockStart := parseBool(record[colUseAsBlockStart])
-	invertBit := parseBool(record[colInvertBit])
 
 	msg := &domain.Message{
 		Number:              number,
@@ -139,10 +147,10 @@ func recordToMessage(record []string, fileName string, line int) (*domain.Messag
 		MessageLevel:        strings.TrimSpace(record[colMessageLevel]),
 		VariableZone:        strings.TrimSpace(record[colVariableZone]),
 		VariableAddress:     strings.TrimSpace(record[colVariableAddress]),
-		UseAsBlockStart:     useAsBlockStart,
+		UseAsBlockStart:     parseBool(record[colUseAsBlockStart]),
 		Type:                strings.TrimSpace(record[colType]),
 		BitNumberInRegister: bitNumber,
-		InvertBit:           invertBit,
+		InvertBit:           parseBool(record[colInvertBit]),
 		SourceFile:          fileName,
 	}
 
